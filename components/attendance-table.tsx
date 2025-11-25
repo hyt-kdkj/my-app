@@ -1,12 +1,14 @@
 'use client'
 
+import { useState } from 'react'
+
 import { Button } from '@/components/ui/button'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 import { Badge } from '@/components/ui/badge'
 
-import { getAttendanceData, getCourseById } from '@/lib/mock-data'
+import { getAttendanceData, getCourseById, getAvailableDates } from '@/lib/mock-data'
 
 interface AttendanceTableProps {
 
@@ -24,17 +26,35 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
 
   const course = getCourseById(courseId)
 
-  const attendanceData = getAttendanceData(courseId)
+  const availableDates = getAvailableDates(courseId)
+
+  const [selectedDate, setSelectedDate] = useState<string>(availableDates[0]?.date || '')
+
+  const attendanceData = getAttendanceData(courseId, selectedDate)
 
   const exportAttendance = () => {
 
+    const selectedDateData = availableDates.find(d => d.date === selectedDate)
+
     const csvContent = [
 
-      ['学籍番号', '氏名', '出席状況', '接続時刻'].join(','),
+      ['学籍番号', '氏名', '出席状況', '接続時刻', '60分後接続'].join(','),
 
       ...attendanceData.map(record =>
 
-        [record.studentId, record.studentName, record.status, record.connectedAt || '-'].join(',')
+        [
+
+          record.studentId,
+
+          record.studentName,
+
+          record.status,
+
+          record.connectedAt || '-',
+
+          record.stillConnectedAfter60Min !== undefined ? (record.stillConnectedAfter60Min ? '接続' : '切断') : '-'
+
+        ].join(',')
 
       )
 
@@ -46,7 +66,7 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
 
     link.href = URL.createObjectURL(blob)
 
-    link.download = `出欠表_${course?.code}_${new Date().toLocaleDateString('ja-JP')}.csv`
+    link.download = `出欠表_${course?.code}_${selectedDateData?.displayDate}.csv`
 
     link.click()
 
@@ -57,6 +77,8 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
   const absentCount = attendanceData.filter(r => r.status === '欠席').length
 
   const lateCount = attendanceData.filter(r => r.status === '遅刻').length
+
+  const earlyLeaveCount = attendanceData.filter(r => r.status === '途中退出').length
 
   return (
     <div className="space-y-6">
@@ -89,7 +111,34 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-4 mb-6">
+
+          {availableDates.length > 0 && (
+            <div className="mb-6">
+              <label className="text-sm font-medium mb-2 block">授業日を選択</label>
+              <div className="flex flex-wrap gap-2">
+
+                {availableDates.map((dateData) => (
+                  <Button
+
+                    key={dateData.date}
+
+                    variant={selectedDate === dateData.date ? 'default' : 'outline'}
+
+                    size="sm"
+
+                    onClick={() => setSelectedDate(dateData.date)}
+                  >
+
+                    {dateData.displayDate}
+                  </Button>
+
+                ))}
+              </div>
+            </div>
+
+          )}
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-4 text-center">
               <div className="text-4xl mb-2">✓</div>
               <div className="text-2xl font-bold text-green-700 dark:text-green-300">{presentCount}</div>
@@ -99,6 +148,11 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
               <div className="text-4xl mb-2">⏰</div>
               <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-300">{lateCount}</div>
               <div className="text-sm text-yellow-600 dark:text-yellow-400">遅刻</div>
+            </div>
+            <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-4 text-center">
+              <div className="text-4xl mb-2">🚪</div>
+              <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">{earlyLeaveCount}</div>
+              <div className="text-sm text-orange-600 dark:text-orange-400">途中退出</div>
             </div>
             <div className="bg-red-50 dark:bg-red-950/30 rounded-lg p-4 text-center">
               <div className="text-4xl mb-2">✕</div>
@@ -115,6 +169,7 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
                   <th className="text-left py-3 px-4 font-semibold">氏名</th>
                   <th className="text-left py-3 px-4 font-semibold">出席状況</th>
                   <th className="text-left py-3 px-4 font-semibold">接続時刻</th>
+                  <th className="text-left py-3 px-4 font-semibold">60分後</th>
                 </tr>
               </thead>
               <tbody>
@@ -132,7 +187,9 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
 
                             record.status === '遅刻' ? 'outline' :
 
-                              'destructive'
+                              record.status === '途中退出' ? 'outline' :
+
+                                'destructive'
 
                         }
 
@@ -142,7 +199,9 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
 
                             record.status === '遅刻' ? 'border-yellow-600 text-yellow-700 dark:text-yellow-400' :
 
-                              ''
+                              record.status === '途中退出' ? 'border-orange-600 text-orange-700 dark:text-orange-400' :
+
+                                ''
 
                         }
                       >
@@ -153,6 +212,20 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
                     <td className="py-3 px-4 text-sm text-muted-foreground">
 
                       {record.connectedAt || '-'}
+                    </td>
+                    <td className="py-3 px-4 text-sm">
+
+                      {record.stillConnectedAfter60Min !== undefined ? (
+                        <span className={record.stillConnectedAfter60Min ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+
+                          {record.stillConnectedAfter60Min ? '接続中' : '切断'}
+                        </span>
+
+                      ) : (
+
+                        '-'
+
+                      )}
                     </td>
                   </tr>
 
