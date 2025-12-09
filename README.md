@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Attendance App
 
-## Getting Started
+## セットアップ手順 (再現性のある環境構築)
 
-First, run the development server:
+このプロジェクトをクローンした直後は、環境変数の設定やデータベースの準備が必要です。以下の手順に従ってセットアップを行ってください。
+
+### 1. 依存関係のインストール
+
+プロジェクトのルートディレクトリ (`attendance_app`) に移動し、パッケージをインストールします。
+
+```bash
+cd attendance_app
+npm install
+```
+
+### 2. 環境変数の設定
+
+`.env` ファイルはセキュリティ上の理由から Git に含まれていません。手動で作成する必要があります。
+プロジェクトルートに `.env` ファイルを作成し、以下の内容を記述してください。
+
+**ファイル名:** `.env`
+
+```env
+DATABASE_URL="file:../dev.db"
+```
+
+### 3. データベースのセットアップ
+
+Prisma を使用してデータベースクライアントの生成とマイグレーションを行います。
+
+```bash
+# Prisma クライアントの生成
+npx prisma generate
+
+# データベースのマイグレーション (dev.db が作成されます)
+npx prisma migrate dev
+```
+
+### 4. 開発サーバーの起動
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+ブラウザで [http://localhost:3000](http://localhost:3000) にアクセスして確認してください。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## GitHub を使った共同開発ガイド
 
-## Learn More
+複数人で開発を行う場合、メインのブランチ (`main`) を直接編集するのではなく、機能ごとにブランチを分けて開発することをお勧めします。
 
-To learn more about Next.js, take a look at the following resources:
+### 推奨されるワークフロー (GitHub Flow)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1.  **Issue の作成**: 開発する機能やバグ修正の内容を Issue として登録します。
+2.  **ブランチの作成**: `main` ブランチから、作業用のブランチを作成します。
+    *   ブランチ名の例: `feature/add-login`, `fix/calendar-bug`, `user/hayate/update-ui`
+    ```bash
+    git checkout main
+    git pull origin main
+    git checkout -b feature/new-feature-name
+    ```
+3.  **開発とコミット**: 変更を加え、こまめにコミットします。
+    ```bash
+    git add .
+    git commit -m "機能追加: 〇〇の実装"
+    ```
+4.  **プッシュ**: 作業ブランチを GitHub にプッシュします。
+    ```bash
+    git push origin feature/new-feature-name
+    ```
+5.  **Pull Request (PR) の作成**: GitHub 上で `main` ブランチに対して Pull Request を作成します。
+6.  **レビューとマージ**: 他の開発者がコードをレビューし、問題なければ `main` にマージします。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 注意点
+*   `.env` ファイルや `node_modules` はコミットしないでください (自動的に `.gitignore` で除外されています)。
+*   `main` ブランチは常に動作する状態を保つようにしましょう。
