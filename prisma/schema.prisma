@@ -20,21 +20,34 @@ model Log {
   meta       String   // JSON文字列として保存
 }
 
-model AttendanceLog {
-  id             Int      @id @default(autoincrement())
-  receivedAt     DateTime @default(now())
-  snapshotAt     DateTime
-  classroomId    String
-  courseId       String?
-  teacherId      String?
-  studentId      String
-  studentName    String?
-  connectionType String?
-  ipAddress      String?
-  deviceInfo     String?
-  meta           String?  // JSON文字列として保存
+// 学生
+model Student {
+  id           Int          @id @default(autoincrement())
+  studentNumber String      @unique      // 学籍番号
+  name         String
+  attendances  Attendance[]
+}
 
-  @@index([snapshotAt, classroomId])
-  @@index([studentId, snapshotAt])
-  @@index([courseId, snapshotAt])
+// 授業（科目）
+model Course {
+  id          Int          @id @default(autoincrement())
+  code        String       @unique       // "INF101" みたいな科目コード
+  name        String
+  attendances Attendance[]
+}
+
+// 出席記録（1学生×1授業×1日）
+model Attendance {
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  courseId  Int
+  date      DateTime        // 授業日の0:00で統一とかでもOK
+  status    String          // "present" / "absent" / "late" など
+  createdAt DateTime @default(now())
+
+  student   Student  @relation(fields: [studentId], references: [id])
+  course    Course   @relation(fields: [courseId], references: [id])
+
+  @@index([courseId, date])
+  @@index([studentId, date])
 }
