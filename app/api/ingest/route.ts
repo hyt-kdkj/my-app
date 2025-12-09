@@ -1,238 +1,90 @@
-// lib/normalize.ts
-
-import { toIsoString } from './time';
-import { normalizeLevel } from './levels';
-export type NormalizedLog = {
-    receivedAt: string;
-    ts: string;
-    host: string | null;
-    app: string | null;
-    pid: number | null;
-    level: 'debug' | 'info' | 'warn' | 'error' | 'fatal' | null;
-    facility: string | null;
-    message: string;
-    tags: string[];
-    meta: Record<string, any>;
-};
-
-function pickString(obj: any, keys: string[]): string | null {
-    for (const k of keys) {
-        const v = obj?.[k];
-        if (v == null) continue;
-        const s = String(v);
-        if (s.length) return s;
-    }
-    return null;
-}
-
-function pickNumber(obj: any, keys: string[]): number | null {
-    for (const k of keys) {
-        const v = obj?.[k];
-        if (v == null) continue;
-        const n = typeof v === 'number' ? v : Number(v);
-        if (!Number.isNaN(n)) return n;
-    }
-    return null;
-}
-
-function pickTags(obj: any, keys: string[]): string[] {
-    for (const k of keys) {
-        const v = obj?.[k];
-        if (!v) continue;
-        if (Array.isArray(v)) return v.map(x => String(x));
-        if (typeof v === 'string') {
-            // "a,b,c" → ["a","b","c"]
-            return v.split(',').map(s => s.trim()).filter(Boolean);
-        }
-    }
-    return [];
-}
-
-function pickFacility(obj: any): string | null {
-    // pri: "auth.info" の先頭をfacilityとみなす
-    const pri = obj?.pri ?? obj?.priority;
-    if (pri && typeof pri === 'string' && pri.includes('.')) {
-        return pri.split('.')[0];
-    }
-
-    // facilityキーがあればそれを使う
-    return pickString(obj, ['facility']);
-}
-
-function pickTimestamp(obj: any): string | null {
-
-    // よくあるキーを総当り
-
-    const candidates = [
-
-        obj?.timestamp, obj?.time, obj?.ts, obj?.@timestamp, obj?.date, obj?.datetime,
-
-    ];
-
-    for (const c of candidates) {
-
-        const iso = toIsoString(c);
-
-        if (iso) return iso;
-
-    }
-
-    return null;
-
-}
-
-function stripKnownKeys(obj: any, used: string[]): Record<string, any> {
-
-    const meta: Record<string, any> = {};
-
-    for (const k of Object.keys(obj ?? {})) {
-
-        if (!used.includes(k)) {
-
-            meta[k] = obj[k];
-
-        }
-
-    }
-
-    return meta;
-
-}
-
-export function normalizeOne(input: any, nowIso: string): NormalizedLog {
-
-    const ts = pickTimestamp(input) ?? nowIso;
-
-    const host = pickString(input, ['host', 'hostname', 'source', 'computer', 'machine']);
-
-    const app = pickString(input, ['app', 'programname', 'proc', 'process', 'appname']);
-
-    const pid = pickNumber(input, ['pid', 'process_id']);
-
-    const facility = pickFacility(input);
-
-    const level = normalizeLevel(input?.level ?? input?.severity ?? input?.pri);
-
-    const message = pickString(input, ['message', 'msg', 'log', 'content', 'text']) ?? '';
-
-    const tags = pickTags(input, ['tags', 'tag']);
-
-    const usedKeys = [
-
-        'timestamp', 'time', 'ts', '@timestamp', 'date', 'datetime',
-
-        'host', 'hostname', 'source', 'computer', 'machine',
-
-        'app', 'programname', 'proc', 'process', 'appname',
-
-        'pid', 'process_id',
-
-        'facility', 'pri', 'priority',
-
-        'level', 'severity',
-
-        'message', 'msg', 'log', 'content', 'text',
-
-        'tags', 'tag',
-
-    ];
-
-    const meta = stripKnownKeys(input, usedKeys);
-
-    return {
-
-        receivedAt: nowIso,
-
-        ts,
-
-        host: host ?? null,
-
-        app: app ?? null,
-
-        pid: pid ?? null,
-
-        level,
-
-        facility: facility ?? null,
-
-        message,
-
-        tags,
-
-        meta
-
-    };
-
-}
-
-export function normalizeAny(payload: unknown): NormalizedLog[] {
-
-    const nowIso = new Date().toISOString();
-
-    if (Array.isArray(payload)) {
-
-        return payload.map(item => normalizeOne(item, nowIso));
-
-    }
-
-    if (payload && typeof payload === 'object') {
-
-        return [normalizeOne(payload as any, nowIso)];
-
-    }
-
-    // 想定外は空配列
-
-    return [];
-
-}
-
-
 // app/api/ingest/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
+import { normalizeLogs } from '@/lib/log-normalizer';
+import { normalizeAttendanceSnapshot } from '@/lib/attendance-normalizer';
+import { prisma } from '@/lib/prisma';
 
-import { normalizeAny } from '@/lib/normalize';
-
-export const runtime = 'nodejs';      // EdgeでなくNodeで動かす
-
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-
     try {
-
         const payload = await req.json();
+        
+        // まず出欠スナップショット形式として処理を試みる
+        const attendanceLogs = normalizeAttendanceSnapshot(payload);
+        
+        if (attendanceLogs.length > 0) {
+            // 出欠スナップショットデータとして保存
+            await prisma.attendanceLog.createMany({
+                data: attendanceLogs.map((log) => ({
+                    receivedAt: new Date(log.receivedAt),
+                    snapshotAt: new Date(log.snapshotAt),
+                    classroomId: log.classroomId,
+                    courseId: log.courseId,
+                    teacherId: log.teacherId,
+                    studentId: log.studentId,
+                    studentName: log.studentName,
+                    connectionType: log.connectionType,
+                    ipAddress: log.ipAddress,
+                    deviceInfo: log.deviceInfo,
+                    meta: Object.keys(log.meta).length > 0 ? JSON.stringify(log.meta) : null,
+                })),
+                skipDuplicates: true,
+            });
 
-        const normalized = normalizeAny(payload);
+            return NextResponse.json({
+                ok: true,
+                type: 'attendance',
+                count: attendanceLogs.length,
+                classrooms: [...new Set(attendanceLogs.map((l) => l.classroomId))],
+                students: [...new Set(attendanceLogs.map((l) => l.studentId))],
+            });
+        }
+        
+        // 出欠スナップショット形式でない場合、従来のログ形式として処理
+        const logs = normalizeLogs(payload);
 
-        // ★ ここでDB保存（Prisma等）を後で実装できます
+        if (logs.length > 0) {
+            const data = logs.map((log) => ({
+                receivedAt: new Date(log.receivedAt),
+                ts: new Date(log.ts),
+                host: log.host,
+                app: log.app,
+                pid: log.pid,
+                level: log.level ?? null,
+                facility: log.facility ?? null,
+                message: log.message,
+                tags: JSON.stringify(log.tags),
+                meta: JSON.stringify(log.meta),
+            }));
 
-        // await prisma.log.createMany({ data: normalized })
+            await prisma.log.createMany({ data });
 
-        return NextResponse.json({ ok: true, count: normalized.length, data: normalized });
+            return NextResponse.json({
+                ok: true,
+                type: 'log',
+                count: logs.length,
+            });
+        }
 
+        return NextResponse.json(
+            { ok: false, error: 'No valid data found in payload' },
+            { status: 400 },
+        );
     } catch (e: any) {
-
-        return NextResponse.json({ ok: false, error: e?.message ?? 'invalid json' }, { status: 400 });
-
+        console.error('Ingest error:', e);
+        return NextResponse.json(
+            { ok: false, error: e?.message ?? 'invalid json' },
+            { status: 400 },
+        );
     }
-
 }
 
 export async function GET() {
-
-    // 動作確認用（ドキュメント）
-
+    // 動作確認用（簡易ヘルプ）
     return NextResponse.json({
-
         ok: true,
-
-        howTo: 'POST JSON (object or array) to this endpoint to normalize it.',
-
-        exampleCurl: `curl -s http://localhost:3000/api/ingest -H 'Content-Type: application/json' -d '{"timestamp":"2025-11-25T12:34:56+09:00","host":"gw-01","programname":"sshd","pid":"1234","msg":"Accepted password","pri":"auth.info"}' | jq .'`
-
+        message: 'POST syslog-style JSON here to normalize and store into DB.',
     });
-
 }
-

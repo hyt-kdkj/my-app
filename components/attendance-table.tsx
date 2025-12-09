@@ -38,7 +38,7 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
 
     const csvContent = [
 
-      ['学籍番号', '氏名', '出席状況', '接続時刻', '60分後接続'].join(','),
+      ['学籍番号', '氏名', '出席状況', '接続時刻', '退出時刻'].join(','),
 
       ...attendanceData.map(record =>
 
@@ -52,7 +52,7 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
 
           record.connectedAt || '-',
 
-          record.stillConnectedAfter60Min !== undefined ? (record.stillConnectedAfter60Min ? '接続' : '切断') : '-'
+          record.departedAt || '-'
 
         ].join(',')
 
@@ -169,7 +169,7 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
                   <th className="text-left py-3 px-4 font-semibold">氏名</th>
                   <th className="text-left py-3 px-4 font-semibold">出席状況</th>
                   <th className="text-left py-3 px-4 font-semibold">接続時刻</th>
-                  <th className="text-left py-3 px-4 font-semibold">60分後</th>
+                  <th className="text-left py-3 px-4 font-semibold">退出時刻</th>
                 </tr>
               </thead>
               <tbody>
@@ -213,19 +213,9 @@ export function AttendanceTable({ teacherId, courseId, onBack, onReset }: Attend
 
                       {record.connectedAt || '-'}
                     </td>
-                    <td className="py-3 px-4 text-sm">
+                    <td className="py-3 px-4 text-sm text-muted-foreground">
 
-                      {record.stillConnectedAfter60Min !== undefined ? (
-                        <span className={record.stillConnectedAfter60Min ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-
-                          {record.stillConnectedAfter60Min ? '接続中' : '切断'}
-                        </span>
-
-                      ) : (
-
-                        '-'
-
-                      )}
+                      {record.departedAt || '-'}
                     </td>
                   </tr>
 

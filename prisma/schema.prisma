@@ -1,0 +1,40 @@
+datasource db {
+  provider = "sqlite"
+}
+ 
+generator client {
+  provider = "prisma-client-js"
+}
+ 
+model Log {
+  id         Int      @id @default(autoincrement())
+  receivedAt DateTime
+  ts         DateTime
+  host       String?
+  app        String?
+  pid        Int?
+  level      String?
+  facility   String?
+  message    String
+  tags       String   // JSON文字列として保存
+  meta       String   // JSON文字列として保存
+}
+
+model AttendanceLog {
+  id             Int      @id @default(autoincrement())
+  receivedAt     DateTime @default(now())
+  snapshotAt     DateTime
+  classroomId    String
+  courseId       String?
+  teacherId      String?
+  studentId      String
+  studentName    String?
+  connectionType String?
+  ipAddress      String?
+  deviceInfo     String?
+  meta           String?  // JSON文字列として保存
+
+  @@index([snapshotAt, classroomId])
+  @@index([studentId, snapshotAt])
+  @@index([courseId, snapshotAt])
+}

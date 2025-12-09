@@ -1,0 +1,68 @@
+
+> my-v0-project@0.1.0 dev
+> next dev
+
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+   ▲ Next.js 16.0.3 (Turbopack)
+   - Local:         http://localhost:3000
+   - Network:       http://10.255.255.254:3000
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 1491ms
+ ⨯ Error: Failed to load external module @prisma/client: Error: Cannot find module '.prisma/client/default'
+Require stack:
+- /home/hayate/Programs/my-app/node_modules/@prisma/client/default.js
+- /home/hayate/Programs/my-app/.next/dev/server/chunks/[root-of-the-server]__1602b8fe._.js
+- /home/hayate/Programs/my-app/.next/dev/server/chunks/[turbopack]_runtime.js
+- /home/hayate/Programs/my-app/.next/dev/server/app/api/attendance/route.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/server/require.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/server/load-components.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/build/utils.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/build/swc/options.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/build/swc/index.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/server/config.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/server/next.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/server/lib/start-server.js
+    at module evaluation (.next/dev/server/chunks/[root-of-the-server]__1602b8fe._.js:454:35)
+    at module evaluation (lib/prisma.ts:2:1)
+    at module evaluation (app/api/attendance/route.ts:11:1)
+    at Object.<anonymous> (.next/dev/server/app/api/attendance/route.js:5:3)
+  1 | // lib/prisma.ts
+> 2 | import { PrismaClient } from '@prisma/client';
+    | ^
+  3 |
+  4 | const globalForPrisma = global as unknown as {
+  5 |     prisma: PrismaClient | undefined; {
+  page: '/api/attendance'
+}
+ ⨯ Error: Failed to load external module @prisma/client: Error: Cannot find module '.prisma/client/default'
+Require stack:
+- /home/hayate/Programs/my-app/node_modules/@prisma/client/default.js
+- /home/hayate/Programs/my-app/.next/dev/server/chunks/[root-of-the-server]__1602b8fe._.js
+- /home/hayate/Programs/my-app/.next/dev/server/chunks/[turbopack]_runtime.js
+- /home/hayate/Programs/my-app/.next/dev/server/app/api/attendance/route.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/server/require.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/server/load-components.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/build/utils.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/build/swc/options.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/build/swc/index.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/build/next-config-ts/transpile-config.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/server/config.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/server/next.js
+- /home/hayate/Programs/my-app/node_modules/next/dist/server/lib/start-server.js
+    at module evaluation (.next/dev/server/chunks/[root-of-the-server]__1602b8fe._.js:454:35)
+    at module evaluation (lib/prisma.ts:2:1)
+    at module evaluation (app/api/attendance/route.ts:11:1)
+    at Object.<anonymous> (.next/dev/server/app/api/attendance/route.js:5:3)
+  1 | // lib/prisma.ts
+> 2 | import { PrismaClient } from '@prisma/client';
+    | ^
+  3 |
+  4 | const globalForPrisma = global as unknown as {
+  5 |     prisma: PrismaClient | undefined; {
+  page: '/api/attendance'
+}
+ GET /api/attendance 500 in 2.2s (compile: 2.0s, render: 209ms)
+ GET /api/attendance 500 in 2.6s (compile: 2.6s, render: 40ms)
