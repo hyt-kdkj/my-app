@@ -1,119 +1,101 @@
+// app/api/attendance/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-
-import {
-    buildRosterFallback,
-    buildSnapshotsFromLogs,
-    computeAttendance,
-    getPeriodBounds,
-    CLASS_PERIODS,
-} from '@/lib/attendance';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const PERIOD_MAX = Math.max(...Object.keys(CLASS_PERIODS).map((k) => Number(k)));
-const PRE_WINDOW_MIN = 30;
-const POST_WINDOW_MIN = 15;
+// GET /api/attendance?courseCode=NW101&date=2025-11-25
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const courseCode = searchParams.get('courseCode');
+    const dateStr = searchParams.get('date'); // "YYYY-MM-DD"
 
-const RequestSchema = z.object({
-    date: z
-        .string()
-        .regex(/^(\d{4})-(\d{2})-(\d{2})$/, 'date must be formatted as YYYY-MM-DD'),
-    period: z.number().int().min(1).max(PERIOD_MAX),
-    courseId: z.string().optional(),
-    teacherId: z.string().optional(),
-    classroomId: z.string().optional(),
-    roster: z
-        .array(
-            z.object({
-                studentId: z.string().min(1),
-                studentName: z.string().optional(),
-            }),
-        )
-        .optional()
-        .default([]),
-});
-
-export async function POST(req: NextRequest) {
-    const body = await readJson(req);
-    if (body == null) {
-        return NextResponse.json({ ok: false, error: 'invalid_json' }, { status: 400 });
+    if (!courseCode || !dateStr) {
+      return NextResponse.json(
+        { ok: false, error: 'courseCode と date は必須です' },
+        { status: 400 },
+      );
     }
 
-    const parsed = RequestSchema.safeParse(body);
-    if (!parsed.success) {
-        return NextResponse.json({ ok: false, error: 'invalid_payload', issues: parsed.error.issues }, { status: 400 });
+    const dayStart = new Date(`${dateStr}T00:00:00`);
+    const dayEnd = new Date(`${dateStr}T23:59:59.999`);
+
+    const course = await prisma.course.findUnique({
+      where: { code: courseCode },
+    });
+
+    if (!course) {
+      return NextResponse.json(
+        { ok: false, error: '指定された courseCode の授業が見つかりません' },
+        { status: 404 },
+      );
     }
 
-    const { date, period, courseId, teacherId, classroomId } = parsed.data;
-    const { start, end } = getPeriodBounds(date, period);
-
-    const rows = await prisma.log.findMany({
-        where: {
-            ts: {
-                gte: new Date(start.getTime() - minutesToMs(PRE_WINDOW_MIN)),
-                lte: new Date(end.getTime() + minutesToMs(POST_WINDOW_MIN)),
-            },
+    // この日はどの session か（1コマ想定）
+    const session = await prisma.session.findFirst({
+      where: {
+        courseId: course.id,
+        date: {
+          gte: dayStart,
+          lte: dayEnd,
         },
-        orderBy: { ts: 'asc' },
+      },
     });
 
-    const snapshots = buildSnapshotsFromLogs(rows).filter((snap) => {
-        if (courseId && snap.courseId && snap.courseId !== courseId) return false;
-        if (teacherId && snap.teacherId && snap.teacherId !== teacherId) return false;
-        if (classroomId && snap.classroomId && snap.classroomId !== classroomId) return false;
-        if (snap.period && snap.period !== period) return false;
-        return true;
+    if (!session) {
+      return NextResponse.json(
+        {
+          ok: true,
+          course: { code: course.code, name: course.name },
+          date: dateStr,
+          attendance: [],
+          note: 'この日付の Session が登録されていません',
+        },
+        { status: 200 },
+      );
+    }
+
+    const records = await prisma.attendance.findMany({
+      where: {
+        sessionId: session.id,
+      },
+      include: {
+        student: true,
+      },
+      orderBy: {
+        student: {
+          studentNumber: 'asc',
+        },
+      },
     });
 
-    const rosterSource = parsed.data.roster.length ? 'request' : 'snapshots';
-    const roster = parsed.data.roster.length ? parsed.data.roster : buildRosterFallback(snapshots);
-
-    const report = computeAttendance({ roster, snapshots, start, end });
-
-    const firstSnapshot = snapshots[0]?.at?.toISOString();
-    const lastSnapshot = snapshots.length ? snapshots[snapshots.length - 1]?.at?.toISOString() : null;
+    const attendance = records.map((r) => ({
+      studentNumber: r.student.studentNumber,
+      name: r.student.name,
+      status: r.status,
+      firstSeen: r.firstSeen,
+      lastSeen: r.lastSeen,
+    }));
 
     return NextResponse.json({
-        ok: true,
-        date,
-        period,
-        window: {
-            start: start.toISOString(),
-            end: end.toISOString(),
-        },
-        filters: {
-            courseId: courseId ?? null,
-            teacherId: teacherId ?? null,
-            classroomId: classroomId ?? null,
-        },
-        roster: {
-            source: rosterSource,
-            size: roster.length,
-        },
-        snapshotSummary: {
-            total: snapshots.length,
-            first: firstSnapshot ?? null,
-            last: lastSnapshot,
-            preWindowMinutes: PRE_WINDOW_MIN,
-            postWindowMinutes: POST_WINDOW_MIN,
-        },
-        stats: report.stats,
-        records: report.records,
-        unknownStudents: report.unknownStudents,
+      ok: true,
+      course: { code: course.code, name: course.name },
+      session: {
+        id: session.id,
+        date: session.date,
+        startTime: session.startTime,
+        endTime: session.endTime,
+      },
+      date: dateStr,
+      attendance,
     });
-}
-
-async function readJson(req: NextRequest) {
-    try {
-        return await req.json();
-    } catch {
-        return null;
-    }
-}
-
-function minutesToMs(minutes: number) {
-    return minutes * 60 * 1000;
+  } catch (e: any) {
+    console.error('[ATTENDANCE ERROR]', e);
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? 'internal error' },
+      { status: 500 },
+    );
+  }
 }
